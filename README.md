@@ -24,7 +24,7 @@ use_frameworks!
 
 target 'YourAwesomeProject' do
 
-    pod 'Gandom-OneSignal', '~> 2.11.0'
+    pod 'Gandom-OneSignal', '~> 2.11.2'
 
     inhibit_all_warnings!
 end
