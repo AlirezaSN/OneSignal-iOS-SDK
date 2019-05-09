@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { "Alireza Sadeghi Nasab (aka Alireza SN)" => "alireza.sadeghinasab@gandom.co"}
   
-  s.source           = { :git => "https://git.gandom.co:gandom/onesignal/ios-onesignal.git", :tag => s.version.to_s }
+  s.source           = { :git => "https://git.gandom.co/gandom/onesignal/ios-onesignal.git", :tag => s.version.to_s }
   
   s.platform     = :ios
   s.requires_arc = true
