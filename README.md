@@ -14,6 +14,22 @@
 #### Installation
 See OneSignal's [iOS Native SDK Setup Guide](https://documentation.onesignal.com/docs/ios-sdk-setup) for documentation.
 
+in your `Podfile`, add these:
+```ruby
+source 'https://git.gandom.co/gandom/helper/ios-podspecs.git'
+
+platform :ios
+
+use_frameworks!
+
+target 'YourAwesomeProject' do
+
+    pod 'Gandom-OneSignal', '~> 2.13.1.1'
+
+    inhibit_all_warnings!
+end
+```
+
 #### API
 See OneSignal's [iOS Native SDK API](https://documentation.onesignal.com/docs/ios-native-sdk) page for a list of all available methods.
 
