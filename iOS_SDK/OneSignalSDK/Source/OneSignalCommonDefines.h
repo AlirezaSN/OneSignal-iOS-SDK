@@ -30,7 +30,7 @@
 
 // networking
 #define API_VERSION @"api/v1/"
-#define SERVER_URL @"http://asa-onesignal.gandom.co/"
+#define SERVER_URL @"https://api.agahpush.com/"
 
 // NSUserDefaults parameter names
 #define EMAIL_AUTH_CODE @"GT_EMAIL_AUTH_CODE"
