@@ -677,6 +677,7 @@
 				3E2400341D4FFC31008BDE70 /* Frameworks */,
 				3E2400351D4FFC31008BDE70 /* Headers */,
 				3E2400361D4FFC31008BDE70 /* Resources */,
+				BBE64C2924486DFF00E7DB1A /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -740,6 +741,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = 37747F8A19147D6400558FAD;
@@ -774,6 +776,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		BBE64C2924486DFF00E7DB1A /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh ${SRCROOT}/build_fat_framework.sh\n";
+		};
 		CA2951BE2167F9860064227A /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -1045,6 +1064,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MACH_O_TYPE = mh_dylib;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				ONESIGNAL_DESTINATION_PATH = "${SRCROOT}/Framework";
+				ONESIGNAL_MACH_O_TYPE = staticlib;
+				ONESIGNAL_OUTPUT_NAME = OneSignal;
+				ONESIGNAL_TARGET_NAME = OneSignalFramework;
 				OTHER_CFLAGS = "-fembed-bitcode";
 				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.onesignal.OneSignal-Dynamic";
@@ -1194,6 +1217,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MACH_O_TYPE = mh_dylib;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				ONESIGNAL_DESTINATION_PATH = "${SRCROOT}/Framework";
+				ONESIGNAL_MACH_O_TYPE = staticlib;
+				ONESIGNAL_OUTPUT_NAME = OneSignal;
+				ONESIGNAL_TARGET_NAME = OneSignalFramework;
 				OTHER_CFLAGS = "-fembed-bitcode";
 				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.onesignal.OneSignal-Dynamic";
