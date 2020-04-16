@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = "Gandom-OneSignal"
-  s.version          = "2.11.2.1"
+  s.version          = "2.11.2.2"
   s.summary          = "OneSignal push notification library for mobile apps. Powered by Gandom proxy servers!"
   s.homepage         = "http://gandom.co"
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
@@ -11,6 +11,6 @@ Pod::Spec.new do |s|
   s.platform     = :ios
   s.requires_arc = true
   
-  s.ios.vendored_frameworks = 'iOS_SDK/OneSignalSDK/Framework/OneSignal.framework'
+  s.source_files = "iOS_SDK/OneSignalSDK/Source/**/*{h,m,swift}"
   s.framework               = 'SystemConfiguration', 'UIKit', 'UserNotifications'
 end
