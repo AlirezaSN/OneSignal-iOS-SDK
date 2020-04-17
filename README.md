@@ -24,9 +24,25 @@ use_frameworks!
 
 target 'YourAwesomeProject' do
 
-    pod 'Gandom-OneSignal', '~> 2.11.2'
+    pod 'Gandom-OneSignal', '~> 2.12.6.1'
 
     inhibit_all_warnings!
+end
+
+target 'OneSignalNotificationServiceExtension' do
+  
+    pod 'Gandom-OneSignal', '2.12.6.1'
+    
+    inhibit_all_warnings!
+  
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['APPLICATION_EXTENSION_API_ONLY'] = 'No'
+    end
+  end
 end
 ```
 
