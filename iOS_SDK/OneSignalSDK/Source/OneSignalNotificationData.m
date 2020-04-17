@@ -57,17 +57,12 @@
     
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Last notification id : %@", notificationId]];
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Last notification was on background: %@", wasOnBackground ? @"YES" : @"NO"]];
-    
-    [userDefaults setObject:notificationId forKey:NOTIFICATION_ID];
-    [userDefaults setObject:[NSNumber numberWithDouble:timeInSeconds] forKey:NOTIFICATION_TIME];
-    [userDefaults setBool:wasOnBackground forKey:NOTIFICATION_FROM_BACKGROUND];
 
     [userDefaults synchronize];
 }
 
 + (NSString * _Nullable)getLastNotificationId {
-    let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
-    return [userDefaults stringForKey:NOTIFICATION_ID];
+    return [NSNull null];
 }
 
 @end
