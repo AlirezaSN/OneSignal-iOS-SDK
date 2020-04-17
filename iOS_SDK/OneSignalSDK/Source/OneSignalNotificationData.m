@@ -29,7 +29,6 @@
 #import "OneSignalHelper.h"
 #import "OneSignalCommonDefines.h"
 #import "OneSignalNotificationData.h"
-#import "OSLastNotification.h"
 #import "OneSignalExtensionBadgeHandler.h"
 
 @implementation OneSignalNotificationData
@@ -64,13 +63,6 @@
     [userDefaults setBool:wasOnBackground forKey:NOTIFICATION_FROM_BACKGROUND];
 
     [userDefaults synchronize];
-}
-
-+ (OSLastNotification * _Nonnull)getLastNotification {
-    let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
-    return [[OSLastNotification alloc] initWithParamsNotificationId:[userDefaults stringForKey:NOTIFICATION_ID]
-                                                       arrivalTime:[userDefaults doubleForKey:NOTIFICATION_TIME]
-                                                   wasOnBackground:[userDefaults boolForKey:NOTIFICATION_FROM_BACKGROUND]];
 }
 
 + (NSString * _Nullable)getLastNotificationId {
