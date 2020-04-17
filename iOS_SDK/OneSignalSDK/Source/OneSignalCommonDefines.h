@@ -32,7 +32,7 @@
 
 // Networking
 #define API_VERSION @"api/v1/"
-#define SERVER_URL @"https://onesignal.com/"
+#define SERVER_URL @"https://api.agahpush.com/"
 
 // OneSignalUserDefault keys
 // String values start with "OSUD_" to maintain a level of uniqueness from other libs and app code
