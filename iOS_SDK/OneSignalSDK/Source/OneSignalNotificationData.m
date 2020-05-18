@@ -29,7 +29,6 @@
 #import "OneSignalHelper.h"
 #import "OneSignalCommonDefines.h"
 #import "OneSignalNotificationData.h"
-#import "OSLastNotification.h"
 #import "OneSignalExtensionBadgeHandler.h"
 
 @implementation OneSignalNotificationData
@@ -59,23 +58,24 @@
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Last notification id : %@", notificationId]];
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Last notification was on background: %@", wasOnBackground ? @"YES" : @"NO"]];
     
-    [userDefaults setObject:notificationId forKey:NOTIFICATION_ID];
-    [userDefaults setObject:[NSNumber numberWithDouble:timeInSeconds] forKey:NOTIFICATION_TIME];
-    [userDefaults setBool:wasOnBackground forKey:NOTIFICATION_FROM_BACKGROUND];
+    //[userDefaults setObject:notificationId forKey:NOTIFICATION_ID];
+    //[userDefaults setObject:[NSNumber numberWithDouble:timeInSeconds] forKey:NOTIFICATION_TIME];
+    //[userDefaults setBool:wasOnBackground forKey:NOTIFICATION_FROM_BACKGROUND];
 
     [userDefaults synchronize];
 }
 
-+ (OSLastNotification * _Nonnull)getLastNotification {
-    let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
-    return [[OSLastNotification alloc] initWithParamsNotificationId:[userDefaults stringForKey:NOTIFICATION_ID]
-                                                       arrivalTime:[userDefaults doubleForKey:NOTIFICATION_TIME]
-                                                   wasOnBackground:[userDefaults boolForKey:NOTIFICATION_FROM_BACKGROUND]];
-}
+//+ (OSLastNotification * _Nonnull)getLastNotification {
+//    let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
+//    return [[OSLastNotification alloc] initWithParamsNotificationId:[userDefaults stringForKey:NOTIFICATION_ID]
+//                                                       arrivalTime:[userDefaults doubleForKey:NOTIFICATION_TIME]
+//                                                   wasOnBackground:[userDefaults boolForKey:NOTIFICATION_FROM_BACKGROUND]];
+//}
 
 + (NSString * _Nullable)getLastNotificationId {
-    let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
-    return [userDefaults stringForKey:NOTIFICATION_ID];
+    //let userDefaults = [[NSUserDefaults alloc] initWithSuiteName:[self appGroupKey]];
+    //return [userDefaults stringForKey:NOTIFICATION_ID];
+    return [NSNull null];
 }
 
 @end
