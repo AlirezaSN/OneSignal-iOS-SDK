@@ -34,12 +34,12 @@
 #import "OSInAppMessageAction.h"
 #import "OSInAppMessageController.h"
 #import "OSInAppMessagePrompt.h"
+#import "OneSignalCommonDefines.h"
+#import "OneSignalDialogController.h"
 
 @interface OneSignal ()
 
-+ (void)sendClickActionOutcomeWithValue:(NSString * _Nonnull)name value:(NSNumber * _Nonnull)value;
-+ (void)sendClickActionUniqueOutcome:(NSString * _Nonnull)name;
-+ (void)sendClickActionOutcome:(NSString * _Nonnull)name;
++ (void)sendClickActionOutcomes:(NSArray<OSInAppMessageOutcome *> *)outcomes;
 
 @end
 
@@ -71,6 +71,10 @@
 @property (nonatomic, readwrite) NSTimeInterval (^dateGenerator)(void);
 
 @property (nonatomic, nullable) NSObject<OSInAppMessagePrompt>*currentPromptAction;
+
+@property (nonatomic, nullable) NSArray<NSObject<OSInAppMessagePrompt> *> *currentPromptActions;
+
+@property (nonatomic, nullable) OSInAppMessage *currentInAppMessage;
 
 @property (nonatomic) BOOL isAppInactive;
 
@@ -142,7 +146,7 @@ static BOOL _isInAppMessagingPaused = false;
         self.currentPromptAction = nil;
         self.isAppInactive = NO;
         // BOOL that controls if in-app messaging is paused or not (false by default)
-        [self setInAppMessagingPaused:false];
+        _isInAppMessagingPaused = false;
     }
     
     return self;
@@ -220,7 +224,7 @@ static BOOL _isInAppMessagingPaused = false;
         if (self.isInAppMessageShowing)
             return;
         // Return early if the app is not active
-        if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) {
+        if (![UIApplication applicationIsActive]) {
             [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"Pause IAMs display due to app inactivity"];
             _isAppInactive = YES;
             return;
@@ -434,7 +438,9 @@ static BOOL _isInAppMessagingPaused = false;
 - (void)messageViewControllerWasDismissed {
     @synchronized (self.messageDisplayQueue) {
         [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"Dismissing IAM and preparing to show next IAM"];
-        
+        // Remove DIRECT influence due to ClickHandler of ClickAction outcomes
+        [OneSignal.sessionManager onDirectInfluenceFromIAMClickFinished];
+
         // Add current dismissed messageId to seenInAppMessages set and save it to NSUserDefaults
         if (self.isInAppMessageShowing) {
             OSInAppMessage *showingIAM = self.messageDisplayQueue.firstObject;
@@ -509,7 +515,8 @@ static BOOL _isInAppMessagingPaused = false;
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"persistInAppMessageForRedisplay saved redisplayedInAppMessages: %@", [redisplayedInAppMessages description]]];
 }
 
-- (void)handlePromptActions:(NSArray<NSObject<OSInAppMessagePrompt> *> *)promptActions {
+- (void)handlePromptActions:(NSArray<NSObject<OSInAppMessagePrompt> *> *)promptActions withMessage:(OSInAppMessage *)inAppMessage {
+    _currentPromptAction = nil;
     for (NSObject<OSInAppMessagePrompt> *promptAction in promptActions) {
         // Don't show prompt twice
         if (!promptAction.hasPrompted) {
@@ -521,15 +528,34 @@ static BOOL _isInAppMessagingPaused = false;
     if (_currentPromptAction) {
         [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"IAM prompt to handle: %@", [_currentPromptAction description]]];
         _currentPromptAction.hasPrompted = YES;
-        [_currentPromptAction handlePrompt:^(BOOL accepted) {
-            _currentPromptAction = nil;
-            [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"IAM prompt to handle finished accepted: %@", accepted ? @"YES" : @"NO"]];
-            [self handlePromptActions:promptActions];
+        [_currentPromptAction handlePrompt:^(PromptActionResult result) {
+            [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"IAM prompt to handle finished accepted: %u", result]];
+            if (inAppMessage.isPreview && result == LOCATION_PERMISSIONS_MISSING_INFO_PLIST) {
+                [self showAlertDialogMessage:inAppMessage promptActions:promptActions];
+            } else {
+                [self handlePromptActions:promptActions withMessage:inAppMessage];
+            }
         }];
     } else if (!_viewController) { // IAM dismissed by action
         [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"IAM with prompt dismissed from actionTaken"];
+        _currentInAppMessage = nil;
+        _currentPromptActions = nil;
         [self evaluateMessageDisplayQueue];
     }
+}
+
+- (void)showAlertDialogMessage:(OSInAppMessage *)inAppMessage
+                 promptActions:(NSArray<NSObject<OSInAppMessagePrompt> *> *)promptActions  {
+    _currentInAppMessage = inAppMessage;
+    _currentPromptActions = promptActions;
+    
+    let message = NSLocalizedString(@"Looks like this app doesn't have location services configured. Please see OneSignal docs for more information.", @"An alert message indicating that the application is not configured to use have location services.");
+    let title = NSLocalizedString(@"Location Not Available", @"An alert title indicating that the location service is unavailable.");
+    let okAction = NSLocalizedString(@"OK", @"Allows the user to acknowledge and dismiss the alert");
+    [[OneSignalDialogController sharedInstance] presentDialogWithTitle:title withMessage:message withActions:nil cancelTitle:okAction withActionCompletion:^(int tappedActionIndex) {
+        //completion is called on the main thread
+        [self handlePromptActions:_currentPromptActions withMessage:_currentInAppMessage];
+    }];
 }
 
 - (void)messageViewDidSelectAction:(OSInAppMessage *)message withAction:(OSInAppMessageAction *)action {
@@ -539,10 +565,14 @@ static BOOL _isInAppMessagingPaused = false;
     if (action.clickUrl)
         [self handleMessageActionWithURL:action];
     
-    [self handlePromptActions:action.promptActions];
+    if (action.promptActions && action.promptActions.count > 0)
+        [self handlePromptActions:action.promptActions withMessage:message];
 
-    if (self.actionClickBlock)
+    if (self.actionClickBlock) {
+        // Any outcome sent on this callback should count as DIRECT from this IAM
+        [OneSignal.sessionManager onDirectInfluenceFromIAMClick:message.messageId];
         self.actionClickBlock(action);
+    }
     
     if (message.isPreview) {
         [self processPreviewInAppMessage:message withAction:action];
@@ -553,7 +583,7 @@ static BOOL _isInAppMessagingPaused = false;
     // Make sure no click, outcome, tag tracking is performed for IAM previews
     [self sendClickRESTCall:message withAction:action];
     [self sendTagCallWithAction:action];
-    [self sendOutcomes:action.outcomes];
+    [self sendOutcomes:action.outcomes forMessageId:message.messageId];
 }
 
 /*
@@ -623,16 +653,11 @@ static BOOL _isInAppMessagingPaused = false;
     }
 }
 
-- (void)sendOutcomes:(NSArray<OSInAppMessageOutcome *>*)outcomes {
-    for (OSInAppMessageOutcome *outcome in outcomes) {
-        if (outcome.unique) {
-            [OneSignal sendClickActionUniqueOutcome:outcome.name];
-        } else if (outcome.weight > 0) {
-            [OneSignal sendClickActionOutcomeWithValue:outcome.name value:outcome.weight];
-        } else {
-            [OneSignal sendClickActionOutcome:outcome.name];
-        }
-    }
+- (void)sendOutcomes:(NSArray<OSInAppMessageOutcome *>*)outcomes forMessageId:(NSString *) messageId {
+    if (outcomes.count == 0)
+        return;
+    [[OneSignal sessionManager] onDirectInfluenceFromIAMClick:messageId];
+    [OneSignal sendClickActionOutcomes:outcomes];
 }
 
 /*
