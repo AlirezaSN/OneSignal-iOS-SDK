@@ -73,6 +73,12 @@ NSArray *locations;
     locations = @[location];
 }
 
++ (void)reset {
+    // Reset request flags
+    calledRequestAlwaysAuthorization = false;
+    calledRequestWhenInUseAuthorization = false;
+}
+
 + (bool)overrideStarted {
     return startedMock;
 }
@@ -117,9 +123,8 @@ NSArray *locations;
 }
 
 - (void)overrideStartUpdatingLocation {
-    // If iOS is less than 8.0, the startUpdatingLocation prompts the user
-    // Otherwise, we want to check if the location request was made for info.plist params
-    if (OneSignalHelperOverrider.mockIOSVersion < 8.0 || calledRequestAlwaysAuthorization || calledRequestWhenInUseAuthorization)
+    // Check if the location request was made for info.plist params
+    if (calledRequestAlwaysAuthorization || calledRequestWhenInUseAuthorization)
         [[OneSignalLocation sharedInstance] locationManager:locationManager didUpdateLocations:locations];
 }
 

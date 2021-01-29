@@ -85,7 +85,9 @@
     for (NSString *triggerKey in newTriggersKeys) {
         for (NSArray <OSTrigger *> *andConditions in message.triggers) {
             for (OSTrigger *trigger in andConditions) {
-                if ([triggerKey isEqual:trigger.property]) {
+                // Dynamic triggers depends on triggerId
+                // Common triggers changed by user depends on property
+                if ([triggerKey isEqual:trigger.property] || [triggerKey isEqualToString:trigger.triggerId]) {
                     // At least one trigger has changed
                     return YES;
                 }
@@ -93,6 +95,26 @@
         }
     }
     return NO;
+}
+
+/*
+ * Part of redisplay logic
+ *
+ * If message has only dynamic trigger return true, otherwise false
+ */
+- (BOOL)messageHasOnlyDynamicTriggers:(OSInAppMessage *)message {
+    if (message.triggers == nil || message.triggers.count == 0)
+        return false;
+
+    for (NSArray <OSTrigger *> *andConditions in message.triggers) {
+        for (OSTrigger *trigger in andConditions) {
+            if ([trigger.kind isEqualToString:OS_DYNAMIC_TRIGGER_KIND_CUSTOM])
+                // At least one trigger is not dynamic
+                return false;
+         }
+    }
+
+    return true;
 }
 
 #pragma mark Private Methods
@@ -261,6 +283,10 @@
 
 - (void)dynamicTriggerFired {
     [self.delegate triggerConditionChanged];
+}
+
+- (void)dynamicTriggerCompleted:(NSString *)triggerId {
+    [self.delegate dynamicTriggerCompleted:triggerId];
 }
 
 @end

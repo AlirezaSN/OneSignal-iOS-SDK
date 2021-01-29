@@ -46,7 +46,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) BOOL isPreview;
 @property (nonatomic) BOOL isDisplayedInSession;
 @property (nonatomic) BOOL isTriggerChanged;
+@property (nonatomic) BOOL dragToDismissDisabled;
 @property (nonatomic) NSNumber *height;
+@property (nonatomic, nullable) NSDate *endTime;
 
 - (BOOL)isBanner;
 - (BOOL)takeActionAsUnique;
@@ -56,6 +58,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)clearClickIds;
 - (void)addClickId:(NSString *)clickId;
+
+- (BOOL)isFinished;
 
 @end
 

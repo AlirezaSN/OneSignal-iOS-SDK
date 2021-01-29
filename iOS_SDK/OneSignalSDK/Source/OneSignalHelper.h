@@ -26,8 +26,10 @@
  */
 
 #import "OneSignal.h"
+#import "OneSignalInternal.h"
 #import "OneSignalWebView.h"
 #import "UIApplication+OneSignal.h"
+#import "NSDateFormatter+OneSignal.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -42,29 +44,25 @@
 + (NSMutableDictionary*) formatApsPayloadIntoStandard:(NSDictionary*)remoteUserInfo identifier:(NSString*)identifier;
 + (void)lastMessageReceived:(NSDictionary*)message;
 
-+(void)setNotificationActionBlock:(OSHandleNotificationActionBlock)block;
-+(void)setNotificationReceivedBlock:(OSHandleNotificationReceivedBlock)block;
-
-+ (void)handleNotificationReceived:(OSNotificationDisplayType)displayType;
-+ (void)handleNotificationReceived:(OSNotificationDisplayType)displayType fromBackground:(BOOL)background;
-+ (void)handleNotificationAction:(OSNotificationActionType)actionType actionID:(NSString*)actionID displayType:(OSNotificationDisplayType)displayType;
-+ (BOOL)handleIAMPreview:(OSNotificationPayload *)payload;
++ (void)setNotificationOpenedBlock:(OSNotificationOpenedBlock)block;
++ (void)setNotificationWillShowInForegroundBlock:(OSNotificationWillShowInForegroundBlock)block;
++ (void)handleWillShowInForegroundHandlerForNotification:(OSNotification *)notification completion:(OSNotificationDisplayResponse)completion;
++ (void)handleNotificationAction:(OSNotificationActionType)actionType actionID:(NSString*)actionID;
++ (BOOL)handleIAMPreview:(OSNotification *)notification;
 
 // - iOS 10
 + (void)registerAsUNNotificationCenterDelegate;
 + (void)clearCachedMedia;
-+ (UNNotificationRequest*)prepareUNNotificationRequest:(OSNotificationPayload*)payload;
-+ (void)addNotificationRequest:(OSNotificationPayload*)payload completionHandler:(void (^)(UIBackgroundFetchResult))completionHandler;
++ (UNNotificationRequest*)prepareUNNotificationRequest:(OSNotification*)notification;
++ (void)addNotificationRequest:(OSNotification*)notification completionHandler:(void (^)(UIBackgroundFetchResult))completionHandler;
 
 // - Notifications
-+ (BOOL)canGetNotificationTypes;
-+ (UILocalNotification*)prepareUILocalNotification:(OSNotificationPayload*)payload;
++ (UILocalNotification*)prepareUILocalNotification:(OSNotification*)notification;
 + (BOOL)verifyURL:(NSString*)urlString;
 + (BOOL)isRemoteSilentNotification:(NSDictionary*)msg;
-+ (BOOL)isInAppPreviewNotification:(NSDictionary*)msg;
-+ (NSMutableSet<UNNotificationCategory*>*)existingCategories;
-+ (void)addAttachments:(OSNotificationPayload*)payload toNotificationContent:(UNMutableNotificationContent*)content;
-+ (void)addActionButtons:(OSNotificationPayload*)payload toNotificationContent:(UNMutableNotificationContent*)content;
++ (BOOL)isDisplayableNotification:(NSDictionary*)msg;
++ (void)addAttachments:(OSNotification*)notification toNotificationContent:(UNMutableNotificationContent*)content;
++ (void)addActionButtons:(OSNotification*)notification toNotificationContent:(UNMutableNotificationContent*)content;
 + (BOOL)isOneSignalPayload:(NSDictionary *)payload;
 
 // - Networking

@@ -63,8 +63,11 @@
 // Tracking for impessions so that an IAM is only tracked once and not several times if it is reshown
 @property (strong, nonatomic, nonnull) NSMutableSet <NSString *> *impressionedInAppMessages;
 
+// Tracking for impessions so that an IAM is only tracked once and not several times if it is reshown
+@property (strong, nonatomic, nonnull) NSMutableSet <NSString *> *viewedPageIDs;
+
 // Click action block to allow overridden behavior when clicking an IAM
-@property (strong, nonatomic, nullable) OSHandleInAppMessageActionClickBlock actionClickBlock;
+@property (strong, nonatomic, nullable) OSInAppMessageClickBlock actionClickBlock;
 
 @property (strong, nullable) OSInAppMessageViewController *viewController;
 
@@ -81,7 +84,7 @@
 @end
 
 @implementation OSMessagingController
-
+@dynamic isInAppMessagingPaused;
 // Maximum time decided to save IAM with redisplay on cache - current value: six months in seconds
 static long OS_IAM_MAX_CACHE_TIME = 6 * 30 * 24 * 60 * 60;
 static OSMessagingController *sharedInstance = nil;
@@ -99,7 +102,7 @@ static dispatch_once_t once;
 
 + (void)removeInstance {
     sharedInstance = nil;
-    once = NULL;
+    once = 0;
 }
 
 static BOOL _isInAppMessagingPaused = false;
@@ -143,6 +146,7 @@ static BOOL _isInAppMessagingPaused = false;
         [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"init redisplayedInAppMessages with: %@", [_redisplayedInAppMessages description]]];
         self.clickedClickIds = [[NSMutableSet alloc] initWithSet:[standardUserDefaults getSavedSetForKey:OS_IAM_CLICKED_SET_KEY defaultValue:nil]];
         self.impressionedInAppMessages = [[NSMutableSet alloc] initWithSet:[standardUserDefaults getSavedSetForKey:OS_IAM_IMPRESSIONED_SET_KEY defaultValue:nil]];
+        self.viewedPageIDs = [[NSMutableSet alloc] initWithSet:[standardUserDefaults getSavedSetForKey:OS_IAM_PAGE_IMPRESSIONED_SET_KEY defaultValue:nil]];
         self.currentPromptAction = nil;
         self.isAppInactive = NO;
         // BOOL that controls if in-app messaging is paused or not (false by default)
@@ -174,7 +178,7 @@ static BOOL _isInAppMessagingPaused = false;
 
 - (void)resetRedisplayMessagesBySession {
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"resetRedisplayMessagesBySession with redisplayedInAppMessages: %@", [_redisplayedInAppMessages description]]];
-    
+
     for (NSString *messageId in _redisplayedInAppMessages) {
         [_redisplayedInAppMessages objectForKey:messageId].isDisplayedInSession = false;
     }
@@ -186,14 +190,14 @@ static BOOL _isInAppMessagingPaused = false;
  */
 - (void)deleteOldRedisplayedInAppMessages {
     NSMutableSet <NSString *> *messagesIdToRemove = [NSMutableSet new];
-    
+
     let maxCacheTime = self.dateGenerator() - OS_IAM_MAX_CACHE_TIME;
     for (NSString *messageId in _redisplayedInAppMessages) {
         if ([_redisplayedInAppMessages objectForKey:messageId].displayStats.lastDisplayTime < maxCacheTime) {
             [messagesIdToRemove addObject:messageId];
         }
     }
-    
+
     if ([messagesIdToRemove count] > 0) {
         NSMutableDictionary <NSString *, OSInAppMessage *> * newRedisplayDictionary = [_redisplayedInAppMessages mutableCopy];
         for (NSString * messageId in messagesIdToRemove) {
@@ -204,7 +208,7 @@ static BOOL _isInAppMessagingPaused = false;
     }
 }
 
-- (void)setInAppMessageClickHandler:(OSHandleInAppMessageActionClickBlock)actionClickBlock {
+- (void)setInAppMessageClickHandler:(OSInAppMessageClickBlock)actionClickBlock {
     self.actionClickBlock = actionClickBlock;
 }
 
@@ -280,6 +284,54 @@ static BOOL _isInAppMessagingPaused = false;
     });
 }
 
+- (void)messageViewPageImpressionRequest:(OSInAppMessage *)message withPageId:(NSString *)pageId {
+    if (message.isPreview) {
+        [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Not sending page impression for preview message. ID: %@",pageId]];
+        return;
+    }
+    
+    if (!pageId) {
+        [OneSignal onesignal_Log:ONE_S_LL_ERROR message:[NSString stringWithFormat:@"Attempting to send page impression for nil page id"]];
+        return;
+    }
+    
+    NSString *messagePrefixedPageId = [message.messageId stringByAppendingString:pageId];
+    
+    if ([self.viewedPageIDs containsObject:messagePrefixedPageId]) {
+        [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Page Impression already sent. id: %@",pageId]];
+        return;
+    }
+
+    [self.viewedPageIDs addObject:messagePrefixedPageId];
+    
+    [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"Page Impression Request page id: %@",pageId]];
+    // Create the request and attach a payload to it
+    let metricsRequest = [OSRequestInAppMessagePageViewed withAppId:OneSignal.appId
+                                                       withPlayerId:OneSignal.currentSubscriptionState.userId
+                                                      withMessageId:message.messageId
+                                                         withPageId:pageId
+                                                       forVariantId:message.variantId];
+    
+    [OneSignalClient.sharedClient executeRequest:metricsRequest
+                                       onSuccess:^(NSDictionary *result) {
+        NSString *successMessage = [NSString stringWithFormat:@"In App Message with message id: %@ and page id: %@, successful POST page impression update with result: %@", message.messageId, pageId, result];
+                                           [OneSignal onesignal_Log:ONE_S_LL_DEBUG message:successMessage];
+                                            // If the post was successful, save the updated viewedPageIds set
+                                            [OneSignalUserDefaults.initStandard saveSetForKey:OS_IAM_PAGE_IMPRESSIONED_SET_KEY withValue:self.viewedPageIDs];
+                                       }
+                                       onFailure:^(NSError *error) {
+        NSString *errorMessage = [NSString stringWithFormat:@"In App Message with message id: %@ and page id: %@, failed POST page impression update with error: %@", message.messageId, pageId, error];
+                                            [OneSignal onesignal_Log:ONE_S_LL_ERROR message:errorMessage];
+                                            if (message) {
+                                                [self.viewedPageIDs removeObject:messagePrefixedPageId];
+                                            }
+                                       }];
+}
+
+- (BOOL)shouldSendImpression:(OSInAppMessage *)message {
+    return !(message.isPreview || [self.impressionedInAppMessages containsObject:message.messageId]);
+}
+
 /*
  Make an impression POST to track that the IAM has been
  Request should only be made for IAMs that are not previews and have not been impressioned yet
@@ -287,14 +339,14 @@ static BOOL _isInAppMessagingPaused = false;
 - (void)messageViewImpressionRequest:(OSInAppMessage *)message {
     // Make sure no tracking is performed for previewed IAMs
     // If the messageId exists in cached impressionedInAppMessages return early so the impression is not tracked again
-    if (message.isPreview || [self.impressionedInAppMessages containsObject:message.messageId])
+    if (![self shouldSendImpression:message])
         return;
     
     // Add messageId to impressionedInAppMessages
     [self.impressionedInAppMessages addObject:message.messageId];
     
     // Create the request and attach a payload to it
-    let metricsRequest = [OSRequestInAppMessageViewed withAppId:OneSignal.app_id
+    let metricsRequest = [OSRequestInAppMessageViewed withAppId:OneSignal.appId
                                                    withPlayerId:OneSignal.currentSubscriptionState.userId
                                                   withMessageId:message.messageId
                                                    forVariantId:message.variantId];
@@ -322,18 +374,20 @@ static BOOL _isInAppMessagingPaused = false;
 - (void)evaluateMessages {
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"Evaluating in app messages"];
     for (OSInAppMessage *message in self.messages) {
-        // Make changes to IAM if redisplay available
-        [self setDataForRedisplay:message];
-        // Should we show the in app message
-        if ([self shouldShowInAppMessage:message]) {
-            [self presentInAppMessage:message];
+        if ([self.triggerController messageMatchesTriggers:message]) {
+            // Make changes to IAM if redisplay available
+            [self setDataForRedisplay:message];
+            // Should we show the in app message
+            if ([self shouldShowInAppMessage:message]) {
+                [self presentInAppMessage:message];
+            }
         }
     }
 }
 
 /*
  Part of redisplay logic
- 
+
  In order to redisplay an IAM, the following conditions must be satisfied:
      1. IAM has redisplay property
      2. Time delay between redisplay satisfied
@@ -347,7 +401,7 @@ static BOOL _isInAppMessagingPaused = false;
     if (!message.displayStats.isRedisplayEnabled) {
         return;
     }
-    
+
     BOOL messageDismissed = [_seenInAppMessages containsObject:message.messageId];
     let redisplayMessageSavedData = [_redisplayedInAppMessages objectForKey:message.messageId];
 
@@ -357,23 +411,37 @@ static BOOL _isInAppMessagingPaused = false;
         NSLog(@"Redisplay IAM: %@", message.jsonRepresentation.description);
         message.displayStats.displayQuantity = redisplayMessageSavedData.displayStats.displayQuantity;
         message.displayStats.lastDisplayTime = redisplayMessageSavedData.displayStats.lastDisplayTime;
-        
+
         // Message that don't have triggers should display only once per session
-        BOOL triggerHasChanged = message.isTriggerChanged || (!redisplayMessageSavedData.isDisplayedInSession && [message.triggers count] == 0);
-        
+        BOOL triggerHasChanged = [self hasMessageTriggerChanged:message];
+
         [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"setDataForRedisplay with message: %@ \ntriggerHasChanged: %@ \nno triggers: %@ \ndisplayed in session saved: %@", message, message.isTriggerChanged ? @"YES" : @"NO", [message.triggers count] == 0 ? @"YES" : @"NO", redisplayMessageSavedData.isDisplayedInSession  ? @"YES" : @"NO"]];
         // Check if conditions are correct for redisplay
         if (triggerHasChanged &&
             [message.displayStats isDelayTimeSatisfied:self.dateGenerator()] &&
             [message.displayStats shouldDisplayAgain]) {
             [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"setDataForRedisplay clear arrays"];
-            
+
             [self.seenInAppMessages removeObject:message.messageId];
             [self.impressionedInAppMessages removeObject:message.messageId];
+            [self.viewedPageIDs removeAllObjects];
+            [OneSignalUserDefaults.initStandard saveSetForKey:OS_IAM_PAGE_IMPRESSIONED_SET_KEY withValue:self.viewedPageIDs];
             [message clearClickIds];
             return;
         }
     }
+}
+
+- (BOOL)hasMessageTriggerChanged:(OSInAppMessage *)message {
+    // Message that only have dynamic trigger should display only once per session
+    BOOL messageHasOnlyDynamicTrigger = [self.triggerController messageHasOnlyDynamicTriggers:message];
+    if (messageHasOnlyDynamicTrigger)
+        return !message.isDisplayedInSession;
+
+    // Message that don't have triggers should display only once per session
+    BOOL shouldMessageDisplayInSession = !message.isDisplayedInSession && [message.triggers count] == 0;
+
+    return message.isTriggerChanged || shouldMessageDisplayInSession;
 }
 
 /*
@@ -382,7 +450,8 @@ static BOOL _isInAppMessagingPaused = false;
  */
 - (BOOL)shouldShowInAppMessage:(OSInAppMessage *)message {
     return ![self.seenInAppMessages containsObject:message.messageId] &&
-           [self.triggerController messageMatchesTriggers:message];
+           [self.triggerController messageMatchesTriggers:message] &&
+           ![message isFinished];
 }
 
 - (void)handleMessageActionWithURL:(OSInAppMessageAction *)action {
@@ -491,8 +560,10 @@ static BOOL _isInAppMessagingPaused = false;
 
 - (void)persistInAppMessageForRedisplay:(OSInAppMessage *)message {
     // If the IAM doesn't have the re display prop or is a preview IAM there is no need to save it
-    if (![message.displayStats isRedisplayEnabled] || message.isPreview)
-      return;
+    if (![message.displayStats isRedisplayEnabled] || message.isPreview) {
+        [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"not persisting %@",message.displayStats]];
+        return;
+    }
 
     let displayTimeSeconds = self.dateGenerator();
     message.displayStats.lastDisplayTime = displayTimeSeconds;
@@ -501,17 +572,17 @@ static BOOL _isInAppMessagingPaused = false;
     message.isDisplayedInSession = true;
 
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"redisplayedInAppMessages: %@", [_redisplayedInAppMessages description]]];
-    
+
     // Update the data to enable future re displays
     // Avoid calling the userdefault data again
     [_redisplayedInAppMessages setObject:message forKey:message.messageId];
 
     [OneSignalUserDefaults.initStandard saveCodeableDataForKey:OS_IAM_REDISPLAY_DICTIONARY withValue:_redisplayedInAppMessages];
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"persistInAppMessageForRedisplay: %@ \nredisplayedInAppMessages: %@", [message description], _redisplayedInAppMessages]];
-    
+
     let standardUserDefaults = OneSignalUserDefaults.initStandard;
     let redisplayedInAppMessages = [[NSMutableDictionary alloc] initWithDictionary:[standardUserDefaults getSavedCodeableDataForKey:OS_IAM_REDISPLAY_DICTIONARY defaultValue:[NSMutableDictionary new]]];
-    
+
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"persistInAppMessageForRedisplay saved redisplayedInAppMessages: %@", [redisplayedInAppMessages description]]];
 }
 
@@ -548,7 +619,7 @@ static BOOL _isInAppMessagingPaused = false;
                  promptActions:(NSArray<NSObject<OSInAppMessagePrompt> *> *)promptActions  {
     _currentInAppMessage = inAppMessage;
     _currentPromptActions = promptActions;
-    
+
     let message = NSLocalizedString(@"Looks like this app doesn't have location services configured. Please see OneSignal docs for more information.", @"An alert message indicating that the application is not configured to use have location services.");
     let title = NSLocalizedString(@"Location Not Available", @"An alert title indicating that the location service is unavailable.");
     let okAction = NSLocalizedString(@"OK", @"Allows the user to acknowledge and dismiss the alert");
@@ -573,7 +644,7 @@ static BOOL _isInAppMessagingPaused = false;
         [OneSignal.sessionManager onDirectInfluenceFromIAMClick:message.messageId];
         self.actionClickBlock(action);
     }
-    
+
     if (message.isPreview) {
         [self processPreviewInAppMessage:message withAction:action];
         return;
@@ -584,6 +655,12 @@ static BOOL _isInAppMessagingPaused = false;
     [self sendClickRESTCall:message withAction:action];
     [self sendTagCallWithAction:action];
     [self sendOutcomes:action.outcomes forMessageId:message.messageId];
+}
+
+- (void)messageViewDidDisplayPage:(OSInAppMessage *)message withPageId:(NSString *)pageId {
+    dispatch_async(dispatch_get_main_queue(), ^{
+           [self messageViewPageImpressionRequest:message withPageId:pageId];
+    });
 }
 
 /*
@@ -620,24 +697,24 @@ static BOOL _isInAppMessagingPaused = false;
     // Track clickId per IAM
     [message addClickId:clickId];
 
-    let metricsRequest = [OSRequestInAppMessageClicked withAppId:OneSignal.app_id
+    let metricsRequest = [OSRequestInAppMessageClicked withAppId:OneSignal.appId
                                                     withPlayerId:OneSignal.currentSubscriptionState.userId
                                                    withMessageId:message.messageId
                                                     forVariantId:message.variantId
                                                       withAction:action];
-   
+
    [OneSignalClient.sharedClient executeRequest:metricsRequest
                                       onSuccess:^(NSDictionary *result) {
                                           NSString *successMessage = [NSString stringWithFormat:@"In App Message with id: %@, successful POST click update for click id: %@, with result: %@", message.messageId, action.clickId,  result];
                                           [OneSignal onesignal_Log:ONE_S_LL_DEBUG message:successMessage];
-                                          
+
                                           // Save the updated clickedClickIds since click was tracked successfully
                                           [OneSignalUserDefaults.initStandard saveSetForKey:OS_IAM_CLICKED_SET_KEY withValue:self.clickedClickIds];
                                       }
                                       onFailure:^(NSError *error) {
                                           NSString *errorMessage = [NSString stringWithFormat:@"In App Message with id: %@, failed POST click update for click id: %@, with error: %@", message.messageId, action.clickId, error];
                                           [OneSignal onesignal_Log:ONE_S_LL_ERROR message:errorMessage];
-                                          
+
                                           // Remove clickId from local clickedClickIds since click was not tracked
                                           [self.clickedClickIds removeObject:action.clickId];
                                       }];
@@ -679,9 +756,9 @@ static BOOL _isInAppMessagingPaused = false;
     self.window.backgroundColor = [UIColor clearColor];
     self.window.opaque = true;
     self.window.clipsToBounds = true;
-    
+
     [self addKeySceneToWindow:self.window];
-    
+
     [self.window makeKeyAndVisible];
 }
 
@@ -697,9 +774,25 @@ static BOOL _isInAppMessagingPaused = false;
     }
 }
 
+- (void)dynamicTriggerCompleted:(NSString *)triggerId {
+    [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:[NSString stringWithFormat:@"messageDynamicTriggerCompleted called with triggerId: %@", triggerId]];
+    [self makeRedisplayMessagesAvailableWithTriggers:@[triggerId]];
+}
+
+- (void)makeRedisplayMessagesAvailableWithTriggers:(NSArray<NSString *> *)triggerIds {
+    for (OSInAppMessage *message in self.messages) {
+        if ([self.redisplayedInAppMessages objectForKey:message.messageId]
+            && [_triggerController hasSharedTriggers:message newTriggersKeys:triggerIds]) {
+            message.isTriggerChanged = YES;
+        }
+    }
+}
+
 #pragma mark OSTriggerControllerDelegate Methods
+
 - (void)triggerConditionChanged {
     // We should re-evaluate all in-app messages
+    [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"Trigger condition changed"];
     [self evaluateMessages];
 }
 
@@ -722,7 +815,7 @@ static BOOL _isInAppMessagingPaused = false;
 - (BOOL)isInAppMessagingPaused { return false; }
 - (void)setInAppMessagingPaused:(BOOL)pause {}
 - (void)updateInAppMessagesFromOnSession:(NSArray<OSInAppMessage *> *)newMessages {}
-- (void)setInAppMessageClickHandler:(OSHandleInAppMessageActionClickBlock)actionClickBlock {}
+- (void)setInAppMessageClickHandler:(OSInAppMessageClickBlock)actionClickBlock {}
 - (void)presentInAppMessage:(OSInAppMessage *)message {}
 - (void)presentInAppPreviewMessage:(OSInAppMessage *)message {}
 - (void)displayMessage:(OSInAppMessage *)message {}
@@ -741,5 +834,6 @@ static BOOL _isInAppMessagingPaused = false;
 - (void)webViewContentFinishedLoading {}
 #pragma mark OSTriggerControllerDelegate Methods
 - (void)triggerConditionChanged {}
+- (void)dynamicTriggerCompleted:(NSString *)triggerId {}
 
 @end

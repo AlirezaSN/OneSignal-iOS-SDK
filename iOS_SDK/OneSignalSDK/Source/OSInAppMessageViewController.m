@@ -94,7 +94,7 @@
 
 @implementation OSInAppMessageViewController
 
-- (instancetype _Nonnull)initWithMessage:(OSInAppMessage *)inAppMessage delegate:(Class<OSInAppMessageViewControllerDelegate>)delegate {
+- (instancetype _Nonnull)initWithMessage:(OSInAppMessage *)inAppMessage delegate:(id<OSInAppMessageViewControllerDelegate>)delegate {
     if (self = [super init]) {
         self.message = inAppMessage;
         self.delegate = delegate;
@@ -445,7 +445,7 @@
         animationOption = UIViewAnimationOptionCurveEaseIn;
         dismissAnimationDuration = MIN_DISMISSAL_ANIMATION_DURATION;
     }
-    
+
     [UIView animateWithDuration:dismissAnimationDuration delay:0.0f options:animationOption animations:^{
         self.view.backgroundColor = [UIColor clearColor];
         self.view.alpha = 0.0f;
@@ -453,9 +453,7 @@
     } completion:^(BOOL finished) {
         if (!finished)
             return;
-        
-        [self dismissViewControllerAnimated:false completion:nil];
-    
+
         self.didPageRenderingComplete = false;
         [self.delegate messageViewControllerWasDismissed];
     }];
@@ -487,15 +485,16 @@
  Adds the pan recognizer (for swiping up and down) and the tap recognizer (for dismissing)
  */
 - (void)setupGestureRecognizers {
-    // Pan gesture recognizer for swiping
-    let recognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGestureRecognizerDidMove:)];
     
-    [self.messageView addGestureRecognizer:recognizer];
-    
-    recognizer.maximumNumberOfTouches = 1;
-    recognizer.minimumNumberOfTouches = 1;
-    
-    self.panGestureRecognizer = recognizer;
+    if (!self.message.dragToDismissDisabled) {
+        // Pan gesture recognizer for swiping
+        let recognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGestureRecognizerDidMove:)];
+        [self.messageView addGestureRecognizer:recognizer];
+        recognizer.maximumNumberOfTouches = 1;
+        recognizer.minimumNumberOfTouches = 1;
+        
+        self.panGestureRecognizer = recognizer;
+    }
     
     // Only center modal and full screen should dismiss on background click
     // Banners will allow interacting with the view behind it still
@@ -623,34 +622,44 @@
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:eventMessage];
     NSString *eventTypeMessage = [NSString stringWithFormat:@"Action Occured with Event Type: %lu", (unsigned long)event.type];
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:eventTypeMessage];
-    
-    if (event) {
-        if (event.type == OSInAppMessageBridgeEventTypePageRenderingComplete) {
-            
-            // BOOL set to true since the JS event fired, meaning the WebView was populated properly with the IAM code
-            self.didPageRenderingComplete = true;
-            
-            self.message.position = event.renderingComplete.displayLocation;
-            self.message.height = event.renderingComplete.height;
 
-            // The page is fully loaded and should now be displayed
-            // This is only fired once the javascript on the page sends the "rendering_complete" type event
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate webViewContentFinishedLoading];
-                [OneSignalHelper performSelector:@selector(displayMessage) onMainThreadOnObject:self withObject:nil afterDelay:0.0f];
-            });
-        }
-        else if (event.type == OSInAppMessageBridgeEventTypePageResize) {
-            // Unused resize event for IAM during actions like orientation changes and displaying an IAM
-//            self.message.height = event.resize.height;
-        }
-        else if (event.type == OSInAppMessageBridgeEventTypeActionTaken) {
-            if (event.userAction.clickType)
-                [self.delegate messageViewDidSelectAction:self.message withAction:event.userAction];
-            if (event.userAction.urlActionType == OSInAppMessageActionUrlTypeReplaceContent)
-                [self.messageView loadReplacementURL:event.userAction.clickUrl];
-            if (event.userAction.closesMessage)
-                [self dismissCurrentInAppMessage];
+    if (event) {
+        switch (event.type) {
+            case OSInAppMessageBridgeEventTypePageRenderingComplete: {
+                // BOOL set to true since the JS event fired, meaning the WebView was populated properly with the IAM code
+                self.didPageRenderingComplete = true;
+               
+                self.message.position = event.renderingComplete.displayLocation;
+                self.message.height = event.renderingComplete.height;
+
+                // The page is fully loaded and should now be displayed
+                // This is only fired once the javascript on the page sends the "rendering_complete" type event
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self.delegate webViewContentFinishedLoading];
+                    [OneSignalHelper performSelector:@selector(displayMessage) onMainThreadOnObject:self withObject:nil afterDelay:0.0f];
+                });
+                break;
+            }
+            case OSInAppMessageBridgeEventTypePageResize: {
+                // Unused resize event for IAM during actions like orientation changes and displaying an IAM
+                // self.message.height = event.resize.height;
+                break;
+            }
+            case OSInAppMessageBridgeEventTypeActionTaken: {
+                if (event.userAction.clickType)
+                   [self.delegate messageViewDidSelectAction:self.message withAction:event.userAction];
+                if (event.userAction.urlActionType == OSInAppMessageActionUrlTypeReplaceContent)
+                   [self.messageView loadReplacementURL:event.userAction.clickUrl];
+                if (event.userAction.closesMessage)
+                   [self dismissCurrentInAppMessage];
+                break;
+            }
+            case OSInAppMessageBridgeEventTypePageChange: {
+                [self.delegate messageViewDidDisplayPage:self.message withPageId: event.pageChange.page.pageId];
+                break;
+            }
+            default:
+                break;
         }
     }
 }
