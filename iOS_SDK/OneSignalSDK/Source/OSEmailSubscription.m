@@ -62,7 +62,7 @@
 
 - (NSString *)description {
     @synchronized (self) {
-        return [NSString stringWithFormat:@"<OSEmailSubscriptionState: emailAddress: %@, emailUserId: %@>", self.emailAddress, self.emailUserId];
+        return [NSString stringWithFormat:@"<OSEmailSubscriptionState: emailAddress: %@, emailUserId: %@, emailAuthCode: %@>", self.emailAddress, self.emailUserId, self.emailAuthCode];
     }
 }
 
@@ -79,7 +79,6 @@
     return copy;
 }
 
-
 - (void)setEmailUserId:(NSString *)emailUserId {
     BOOL changed = emailUserId != _emailUserId;
     _emailUserId = emailUserId;
@@ -90,6 +89,10 @@
 
 - (void)setEmailAddress:(NSString *)emailAddress {
     _emailAddress = emailAddress;
+}
+
+- (BOOL)isEmailSetup {
+    return _emailUserId && (!_requiresEmailAuth || _emailAuthCode);
 }
 
 - (NSDictionary *)toDictionary {
@@ -117,10 +120,7 @@
     OSEmailSubscriptionStateChanges* stateChanges = [[OSEmailSubscriptionStateChanges alloc] init];
     stateChanges.from = OneSignal.lastEmailSubscriptionState;
     stateChanges.to = [state copy];
-    
-    // wants OSEmailSubscriptionState
-    
-    
+
     BOOL hasReceiver = [OneSignal.emailSubscriptionStateChangesObserver notifyChange:stateChanges];
     if (hasReceiver) {
         OneSignal.lastEmailSubscriptionState = [state copy];

@@ -52,12 +52,13 @@
 #import "OSOutcomeEventsCache.h"
 #import "OSInfluenceDataRepository.h"
 #import "OneSignalLocation.h"
-#import "NSUserDefaultsOverrider.h"
 #import "OneSignalNotificationServiceExtensionHandler.h"
 #import "OneSignalTrackFirebaseAnalytics.h"
 #import "OSMessagingControllerOverrider.h"
 #import "OneSignalLifecycleObserver.h"
 #import "OneSignalLocationOverrider.h"
+#import "OneSignalOverrider.h"
+#import "OneSignalUserDefaults.h"
 
 NSString * serverUrlWithPath(NSString *path) {
     return [OS_API_SERVER_URL stringByAppendingString:path];
@@ -244,12 +245,27 @@ static XCTestCase* _currentXCTestCase;
     _currentXCTestCase = testCase;
     [self beforeAllTest];
     [self clearStateForAppRestart:testCase];
-    
+    [self clearUserDefaults];
     [NSDateOverrider reset];
+    [OneSignalOverrider reset];
     [OneSignalClientOverrider reset:testCase];
-    [NSUserDefaultsOverrider clearInternalDictionary];
     UNUserNotificationCenterOverrider.notifTypesOverride = 7;
     UNUserNotificationCenterOverrider.authorizationStatus = [NSNumber numberWithInteger:UNAuthorizationStatusAuthorized];
+}
+
++ (void)clearUserDefaults {
+    let userDefaults = OneSignalUserDefaults.initStandard.userDefaults;
+    let dictionary = [userDefaults dictionaryRepresentation];
+    for (NSString *key in dictionary.allKeys) {
+        [userDefaults removeObjectForKey:key];
+    }
+    
+    let sharedUserDefaults = OneSignalUserDefaults.initShared.userDefaults;
+    let sharedDictionary = [sharedUserDefaults dictionaryRepresentation];
+    for (NSString *key in sharedDictionary.allKeys) {
+        [sharedUserDefaults removeObjectForKey:key];
+    }
+
 }
 
 + (void)foregroundApp {
@@ -431,6 +447,14 @@ static XCTestCase* _currentXCTestCase;
 @implementation OSEmailSubscriptionStateTestObserver
 - (void)onOSEmailSubscriptionChanged:(OSEmailSubscriptionStateChanges *)stateChanges {
     NSLog(@"UnitTest:onOSEmailSubscriptionChanged: \n%@", stateChanges);
+    last = stateChanges;
+    fireCount++;
+}
+@end
+
+@implementation OSSMSSubscriptionStateTestObserver
+- (void)onOSSMSSubscriptionChanged:(OSSMSSubscriptionStateChanges *)stateChanges {
+    NSLog(@"UnitTest:onOSSMSSubscriptionChanged: \n%@", stateChanges);
     last = stateChanges;
     fireCount++;
 }

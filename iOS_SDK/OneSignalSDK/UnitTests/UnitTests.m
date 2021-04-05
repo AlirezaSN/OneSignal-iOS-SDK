@@ -58,7 +58,6 @@
 
 // Shadows
 #import "NSObjectOverrider.h"
-#import "NSUserDefaultsOverrider.h"
 #import "NSDateOverrider.h"
 #import "NSBundleOverrider.h"
 #import "UNUserNotificationCenterOverrider.h"
@@ -71,6 +70,8 @@
 #import "OneSignalLocation.h"
 #import "OneSignalLocationOverrider.h"
 #import "UIDeviceOverrider.h"
+#import "OneSignalOverrider.h"
+#import "NSTimeZoneOverrider.h"
 
 // Dummies
 #import "DummyNotificationCenterDelegate.h"
@@ -106,6 +107,7 @@
 - (void)setUp {
     [super setUp];
     [UnitTestCommonMethods beforeEachTest:self];
+    OneSignalOverrider.shouldOverrideLaunchURL = false;
 
     // Only enable remote-notifications in UIBackgroundModes
     NSBundleOverrider.nsbundleDictionary = @{@"UIBackgroundModes": @[@"remote-notification"]};
@@ -560,7 +562,6 @@
     XCTAssertEqual(observer->fireCount, 2);
 }
 
-
 - (void)testPermissionAndSubscriptionChangeObserverRemove {
     [UnitTestCommonMethods setCurrentNotificationPermissionAsUnanswered];
     [UnitTestCommonMethods initOneSignal];
@@ -602,6 +603,7 @@
     
     XCTAssertEqual(observer->last.from.isSubscribed, true);
     XCTAssertEqual(observer->last.to.isSubscribed, false);
+    XCTAssertEqual(observer->fireCount, 2);
 }
 
 - (void)testSubscriptionChangeObserverWhenPromptNotShown {
@@ -710,6 +712,35 @@
     
     XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequest[@"app_id"], @"b2f7f966-d8cc-11e4-bed1-df8f05be55ba");
     XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequest[@"notification_types"], @-19);
+}
+
+// This test covers migrating to OneSignal with the following senario;
+// 1. App was released publicly to the AppStore with push on with another provider.
+// 2. User imports all existing push tokens into OneSignal.
+// 3. OneSignal is added to their app.
+// 4. Ensure that identifier is always send with the player create, to prevent duplicated players
+- (void)testNotificationPermissionsAcceptedBeforeAddingOneSiganl_waitsForAPNSTokenBeforePlayerCreate {
+    // 1. Set that notification permissions are already enabled.
+    UNUserNotificationCenterOverrider.notifTypesOverride = 7;
+    UNUserNotificationCenterOverrider.authorizationStatus = [NSNumber numberWithInteger:UNAuthorizationStatusAuthorized];
+
+    // 2. Setup delay of APNs reaponse
+    [UIApplicationOverrider setBlockApnsResponse:true];
+
+    // 3. Init OneSignal
+    [UnitTestCommonMethods initOneSignal_andThreadWait];
+    [NSObjectOverrider runPendingSelectors];
+
+    // 4. Don't make a network call right away
+    XCTAssertNil(OneSignalClientOverrider.lastHTTPRequest);
+
+    // 5. Simulate APNs now giving us a push token
+    [UIApplicationOverrider setBlockApnsResponse:false];
+    [UnitTestCommonMethods runBackgroundThreads];
+
+    // 6. Ensure we registered with push token and it has the correct notification_types
+    XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequest[@"notification_types"], @15);
+    XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequest[@"identifier"], @"0000000000000000000000000000000000000000000000000000000000000000");
 }
 
 - (void)testNotificationTypesWhenAlreadyAcceptedWithAutoPromptOffOnFristStartPreIos10 {
@@ -2746,7 +2777,6 @@ didReceiveRemoteNotification:userInfo
 - (void)testRemoveExternalUserId_forPushAndEmail_withAuthHash {
     // 1. Init OneSignal
     [UnitTestCommonMethods initOneSignal_andThreadWait];
-    
     // 2. Set email
     [OneSignal setEmail:TEST_EMAIL withEmailAuthHashToken:TEST_EMAIL_HASH_TOKEN];
     [UnitTestCommonMethods runBackgroundThreads];
@@ -2956,6 +2986,7 @@ didReceiveRemoteNotification:userInfo
 - (void)testDeviceStateJson {
     [UnitTestCommonMethods initOneSignal_andThreadWait];
     [OneSignal setEmail:@"test@gmail.com"];
+    [OneSignal setSMSNumber:@"12345689"];
     [UnitTestCommonMethods runBackgroundThreads];
     let deviceState = [[OSDeviceState alloc] initWithSubscriptionState:[OneSignal getPermissionSubscriptionState]];
     let json = [deviceState jsonRepresentation];
@@ -2968,6 +2999,9 @@ didReceiveRemoteNotification:userInfo
     XCTAssertEqualObjects(json[@"emailAddress"], @"test@gmail.com");
     XCTAssertEqualObjects(json[@"notificationPermissionStatus"], @2);
     XCTAssertEqualObjects(json[@"isEmailSubscribed"], @1);
+    XCTAssertEqualObjects(json[@"smsUserId"], OneSignalClientOverrider.smsUserId);
+    XCTAssertEqualObjects(json[@"smsNumber"], @"12345689");
+    XCTAssertEqualObjects(json[@"isSMSSubscribed"], @1);
 }
 
 - (void)testNotificationJson {
@@ -2992,4 +3026,43 @@ didReceiveRemoteNotification:userInfo
     XCTAssertEqualObjects(json[@"templateName"], @"Template name");
 }
 
+- (void)testLaunchURL {
+        
+    // 1. Init OneSignal with app start
+    [UnitTestCommonMethods initOneSignal];
+    [UnitTestCommonMethods runBackgroundThreads];
+
+    // 2. Simulate a notification being opened
+    let notifResponse = [self createBasiciOSNotificationResponse];
+    let notifCenter = UNUserNotificationCenter.currentNotificationCenter;
+    let notifCenterDelegate = notifCenter.delegate;
+    [notifCenterDelegate userNotificationCenter:notifCenter didReceiveNotificationResponse:notifResponse withCompletionHandler:^() {}];
+
+    // 3. Setup OneSignal.setNotificationOpenedHandler
+    __block BOOL openedWasFire = false;
+    [OneSignal setNotificationOpenedHandler:^(OSNotificationOpenedResult * _Nonnull result) {
+        openedWasFire = true;
+    }];
+    // 4. Wait for open event to fire
+    [UnitTestCommonMethods runBackgroundThreads];
+
+    // 5. Ensure the OneSignal public callback fired
+    XCTAssertTrue(openedWasFire);
+    
+    // 6. Ensure the launch URL was not opened
+    XCTAssertFalse(OneSignalOverrider.launchWebURLWasCalled);
+}
+
+- (void)testTimezoneId {
+       
+    let mockTimezone = [NSTimeZone timeZoneWithName:@"Europe/London"];
+    [NSTimeZoneOverrider setLocalTimeZone:mockTimezone];
+    
+    [UnitTestCommonMethods initOneSignal_andThreadWait];
+    
+    NSLog(@"CHECKING LAST HTTP REQUEST");
+    
+    XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequest[@"timezone_id"], mockTimezone.name);
+    
+}
 @end

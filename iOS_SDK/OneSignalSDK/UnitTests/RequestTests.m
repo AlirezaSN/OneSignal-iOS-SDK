@@ -508,13 +508,23 @@ BOOL checkHttpBody(NSData *bodyData, NSDictionary *correct) {
 }
 
 - (void)testUpdateDeviceToken {
-    let request = [OSRequestUpdateDeviceToken withUserId:testUserId appId:testAppId deviceToken:@"test_device_token" notificationTypes:@0 withParentId:@"test_parent_id" emailAuthToken:nil email:testEmailAddress externalIdAuthToken:@"external_id_auth_token"];
+    let request = [OSRequestUpdateDeviceToken withUserId:testUserId appId:testAppId deviceToken:@"test_device_token" notificationTypes:@0 externalIdAuthToken:@"external_id_auth_token"];
+
+    let correctUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@", testUserId]);
+    
+    XCTAssertTrue([correctUrl isEqualToString:request.urlRequest.URL.absoluteString]);
+    
+    XCTAssertTrue(checkHttpBody(request.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"notification_types" : @0, @"identifier" : @"test_device_token", @"external_user_id_auth_hash" : @"external_id_auth_token"}));
+}
+
+- (void)testUpdateEmailDeviceToken {
+    let request = [OSRequestUpdateDeviceToken withUserId:testUserId appId:testAppId deviceToken:@"test_device_token" withParentId:@"test_parent_id" emailAuthToken:nil email:testEmailAddress externalIdAuthToken:@"external_id_auth_token"];
     
     let correctUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@", testUserId]);
     
     XCTAssertTrue([correctUrl isEqualToString:request.urlRequest.URL.absoluteString]);
     
-    XCTAssertTrue(checkHttpBody(request.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"email" : testEmailAddress, @"notification_types" : @0, @"identifier" : @"test_device_token", @"parent_player_id" : @"test_parent_id", @"external_user_id_auth_hash" : @"external_id_auth_token"}));
+    XCTAssertTrue(checkHttpBody(request.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"email" : testEmailAddress, @"identifier" : @"test_device_token", @"parent_player_id" : @"test_parent_id", @"external_user_id_auth_hash" : @"external_id_auth_token"}));
 }
 
 - (void)testCreateDevice {
@@ -535,16 +545,6 @@ BOOL checkHttpBody(NSData *bodyData, NSDictionary *correct) {
     XCTAssertTrue([correctUrl isEqualToString:request.urlRequest.URL.absoluteString]);
     
     XCTAssertTrue(checkHttpBody(request.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"device_type" : @0, @"identifier" : testEmailAddress, @"email_auth_hash" : [NSNull null], @"device_player_id" : testUserId, @"external_user_id_auth_hash" : @"external_id_auth_token"}));
-}
-
-- (void)testLogoutEmail {
-    let request = [OSRequestLogoutEmail withAppId:testAppId emailPlayerId:testEmailUserId devicePlayerId:testUserId emailAuthHash:nil];
-    
-    let correctUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@/email_logout", testUserId]);
-    
-    XCTAssertTrue([correctUrl isEqualToString:request.urlRequest.URL.absoluteString]);
-    
-    XCTAssertTrue(checkHttpBody(request.urlRequest.HTTPBody, @{@"parent_player_id" : testEmailUserId, @"email_auth_hash" : [NSNull null], @"app_id" : testAppId}));
 }
 
 - (void)testUpdateNotificationTypes {
@@ -650,7 +650,7 @@ BOOL checkHttpBody(NSData *bodyData, NSDictionary *correct) {
     XCTAssertTrue([correctUrl isEqualToString:firstRequest.urlRequest.URL.absoluteString]);
     
     OSFocusInfluenceParam *influenceParams = [[OSFocusInfluenceParam alloc] initWithParamsInfluenceIds:[NSArray arrayWithObject:testNotificationId] influenceKey:@"notification_ids" directInfluence:NO influenceDirectKey:@"direct"];
-    let secondRequest = [OSRequestOnFocus withUserId:testUserId appId:testAppId activeTime:@2 netType:@3 emailAuthToken:nil externalIdAuthToken:nil deviceType:testDeviceType influenceParams:[NSArray arrayWithObject:influenceParams]];
+    let secondRequest = [OSRequestOnFocus withUserId:testUserId appId:testAppId activeTime:@2 netType:@3 deviceType:testDeviceType influenceParams:[NSArray arrayWithObject:influenceParams]];
 
     let secondCorrectUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@/on_focus", testUserId]);
     
@@ -659,26 +659,6 @@ BOOL checkHttpBody(NSData *bodyData, NSDictionary *correct) {
     XCTAssertTrue(checkHttpBody(firstRequest.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"badgeCount" : @0}));
     
     XCTAssertTrue(checkHttpBody(secondRequest.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"state" : @"ping", @"type" : @1, @"active_time" : @2, @"net_type" : @3, @"device_type" : testDeviceType, @"direct" : @NO, @"notification_ids": testNotificationIds}));
-}
-
-- (void)testOnFocusWithAuthToken {
-    let firstRequest = [OSRequestBadgeCount withUserId:testUserId appId:testAppId badgeCount:@0 emailAuthToken:nil externalIdAuthToken:@"external_id_auth_token"];
-    
-    let correctUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@", testUserId]);
-    NSArray * testNotificationIds = [NSArray arrayWithObject:testNotificationId];
-    
-    XCTAssertTrue([correctUrl isEqualToString:firstRequest.urlRequest.URL.absoluteString]);
-    
-    OSFocusInfluenceParam *influenceParams = [[OSFocusInfluenceParam alloc] initWithParamsInfluenceIds:[NSArray arrayWithObject:testNotificationId] influenceKey:@"notification_ids" directInfluence:NO influenceDirectKey:@"direct"];
-    let secondRequest = [OSRequestOnFocus withUserId:testUserId appId:testAppId activeTime:@2 netType:@3 emailAuthToken:nil externalIdAuthToken:@"external_id_auth_token" deviceType:testDeviceType influenceParams:[NSArray arrayWithObject:influenceParams]];
-
-    let secondCorrectUrl = correctUrlWithPath([NSString stringWithFormat:@"players/%@/on_focus", testUserId]);
-    
-    XCTAssertTrue([secondCorrectUrl isEqualToString:secondRequest.urlRequest.URL.absoluteString]);
-    
-    XCTAssertTrue(checkHttpBody(firstRequest.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"badgeCount" : @0, @"external_user_id_auth_hash" : @"external_id_auth_token"}));
-    
-    XCTAssertTrue(checkHttpBody(secondRequest.urlRequest.HTTPBody, @{@"app_id" : testAppId, @"state" : @"ping", @"type" : @1, @"active_time" : @2, @"net_type" : @3, @"device_type" : testDeviceType, @"direct" : @NO, @"notification_ids": testNotificationIds, @"external_user_id_auth_hash" : @"external_id_auth_token"}));
 }
 
 - (void)testInAppMessageViewed {

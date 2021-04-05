@@ -38,6 +38,8 @@
 #import "OSPermission.h"
 #import "OSSubscription.h"
 #import "OSEmailSubscription.h"
+#import "OSPlayerTags.h"
+#import "OSSMSSubscription.h"
 
 #import "OneSignalCommonDefines.h"
 #import "OSSessionManager.h"
@@ -51,10 +53,10 @@
 @property (readwrite) OSPermissionState* _Nonnull permissionStatus;
 @property (readwrite) OSSubscriptionState* _Nonnull subscriptionStatus;
 @property (readwrite) OSEmailSubscriptionState* _Nonnull emailSubscriptionStatus;
+@property (readwrite) OSSMSSubscriptionState* _Nonnull smsSubscriptionStatus;
 - (NSDictionary* _Nonnull)toDictionary;
 
 @end
-
 
 @interface OneSignal (OneSignalInternal)
 
@@ -90,6 +92,8 @@
 + (OSPermissionSubscriptionState*_Nonnull)getPermissionSubscriptionState;
 
 + (void)onesignal_Log:(ONE_S_LOG_LEVEL)logLevel message:(NSString* _Nonnull)message;
+
++ (OSPlayerTags *)getPlayerTags;
 
 @end
 

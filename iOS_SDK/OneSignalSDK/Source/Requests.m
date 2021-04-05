@@ -78,6 +78,14 @@
 
 @implementation OSRequestSendTagsToServer
 + (instancetype _Nonnull)withUserId:(NSString * _Nonnull)userId appId:(NSString * _Nonnull)appId tags:(NSDictionary * _Nonnull)tags networkType:(NSNumber * _Nonnull)netType withEmailAuthHashToken:(NSString * _Nullable)emailAuthToken withExternalIdAuthHashToken:(NSString * _Nullable)externalIdAuthToken {
+    return [self withUserId:userId appId:appId tags:tags networkType:netType withAuthHashToken:emailAuthToken withAuthTokenKey:@"email_auth_hash" withExternalIdAuthHashToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId tags:(NSDictionary *)tags networkType:(NSNumber *)netType withSMSAuthHashToken:(NSString *)smsAuthToken withExternalIdAuthHashToken:(NSString *)externalIdAuthToken {
+    return [self withUserId:userId appId:appId tags:tags networkType:netType withAuthHashToken:smsAuthToken withAuthTokenKey:@"sms_auth_hash" withExternalIdAuthHashToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId tags:(NSDictionary *)tags networkType:(NSNumber *)netType withAuthHashToken:(NSString *)authToken withAuthTokenKey:(NSString *)authTokenKey withExternalIdAuthHashToken:(NSString *)externalIdAuthToken {
     let request = [OSRequestSendTagsToServer new];
     
     let params = [NSMutableDictionary new];
@@ -85,8 +93,8 @@
     params[@"tags"] = tags;
     params[@"net_type"] = netType;
     
-    if (emailAuthToken && emailAuthToken.length > 0)
-        params[@"email_auth_hash"] = emailAuthToken;
+    if (authToken && authToken.length > 0)
+        params[authTokenKey] = authToken;
     
     if (externalIdAuthToken && externalIdAuthToken.length > 0)
         params[@"external_user_id_auth_hash"] = externalIdAuthToken;
@@ -97,6 +105,8 @@
     
     return request;
 }
+
+
 @end
 
 @implementation OSRequestPostNotification
@@ -115,8 +125,30 @@
 @end
 
 @implementation OSRequestUpdateDeviceToken
-+ (instancetype _Nonnull)withUserId:(NSString * _Nonnull)userId appId:(NSString * _Nonnull)appId deviceToken:(NSString * _Nullable)identifier notificationTypes:(NSNumber * _Nullable)notificationTypes withParentId:(NSString * _Nullable)parentId emailAuthToken:(NSString * _Nullable)emailAuthHash email:(NSString * _Nullable)email externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken {
++ (instancetype _Nonnull)withUserId:(NSString * _Nonnull)userId appId:(NSString * _Nonnull)appId deviceToken:(NSString * _Nullable)identifier notificationTypes:(NSNumber * _Nullable)notificationTypes externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken {
     
+    let request = [OSRequestUpdateDeviceToken new];
+    
+    let params = [NSMutableDictionary new];
+    params[@"app_id"] = appId;
+   
+    if (notificationTypes)
+        params[@"notification_types"] = notificationTypes;
+    
+    if (identifier)
+        params[@"identifier"] = identifier;
+    
+    if (externalIdAuthToken && externalIdAuthToken.length > 0)
+        params[@"external_user_id_auth_hash"] = externalIdAuthToken;
+    
+    request.parameters = params;
+    request.method = PUT;
+    request.path = [NSString stringWithFormat:@"players/%@", userId];
+    
+    return request;
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId deviceToken:(NSString *)identifier withParentId:(NSString *)parentId emailAuthToken:(NSString *)emailAuthHash email:(NSString *)email externalIdAuthToken:(NSString *)externalIdAuthToken {
     let request = [OSRequestUpdateDeviceToken new];
     
     let params = [NSMutableDictionary new];
@@ -124,9 +156,6 @@
     
     if (email)
         params[@"email"] = email;
-    
-    if (notificationTypes)
-        params[@"notification_types"] = notificationTypes;
     
     if (identifier)
         params[@"identifier"] = identifier;
@@ -136,6 +165,28 @@
     
     if (emailAuthHash && emailAuthHash.length > 0)
         params[@"email_auth_hash"] = emailAuthHash;
+    
+    if (externalIdAuthToken && externalIdAuthToken.length > 0)
+        params[@"external_user_id_auth_hash"] = externalIdAuthToken;
+    
+    request.parameters = params;
+    request.method = PUT;
+    request.path = [NSString stringWithFormat:@"players/%@", userId];
+    
+    return request;
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId deviceToken:(NSString *)identifier smsAuthToken:(NSString *)smsAuthToken externalIdAuthToken:(NSString *)externalIdAuthToken {
+    let request = [OSRequestUpdateDeviceToken new];
+    
+    let params = [NSMutableDictionary new];
+    params[@"app_id"] = appId;
+
+    if (identifier)
+        params[@"identifier"] = identifier;
+    
+    if (smsAuthToken && smsAuthToken.length > 0)
+        params[SMS_NUMBER_AUTH_HASH_KEY] = smsAuthToken;
     
     if (externalIdAuthToken && externalIdAuthToken.length > 0)
         params[@"external_user_id_auth_hash"] = externalIdAuthToken;
@@ -157,6 +208,24 @@
        @"device_type" : deviceType,
        @"identifier" : email ?: [NSNull null],
        @"email_auth_hash" : emailAuthHash ?: [NSNull null],
+       @"external_user_id_auth_hash" : externalIdAuthToken ?: [NSNull null],
+       @"device_player_id" : playerId ?: [NSNull null]
+    };
+    
+    request.method = POST;
+    request.path = @"players";
+    
+    return request;
+}
+
++ (instancetype)withAppId:(NSString *)appId withDeviceType:(NSNumber *)deviceType withSMSNumber:(NSString *)smsNumber withPlayerId:(NSString *)playerId withSMSAuthHash:(NSString *)smsAuthHash withExternalIdAuthToken:(NSString *)externalIdAuthToken {
+    let request = [OSRequestCreateDevice new];
+    
+    request.parameters = @{
+       @"app_id" : appId,
+       @"device_type" : deviceType,
+       @"identifier" : smsNumber ?: [NSNull null],
+       SMS_NUMBER_AUTH_HASH_KEY : smsAuthHash ?: [NSNull null],
        @"external_user_id_auth_hash" : externalIdAuthToken ?: [NSNull null],
        @"device_player_id" : playerId ?: [NSNull null]
     };
@@ -273,6 +342,14 @@
 
 @implementation OSRequestSendLocation
 + (instancetype _Nonnull)withUserId:(NSString * _Nonnull)userId appId:(NSString * _Nonnull)appId location:(os_last_location * _Nonnull)coordinate networkType:(NSNumber * _Nonnull)netType backgroundState:(BOOL)backgroundState emailAuthHashToken:(NSString * _Nullable)emailAuthHash externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken {
+    return [self withUserId:userId appId:appId location:coordinate networkType:netType backgroundState:backgroundState authHashToken:emailAuthHash authHashTokenKey:@"email_auth_hash" externalIdAuthToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId location:(os_last_location *)coordinate networkType:(NSNumber *)netType backgroundState:(BOOL)backgroundState smsAuthHashToken:(NSString *)smsAuthHash externalIdAuthToken:(NSString *)externalIdAuthToken {
+    return [self withUserId:userId appId:appId location:coordinate networkType:netType backgroundState:backgroundState authHashToken:smsAuthHash authHashTokenKey:@"sms_auth_hash" externalIdAuthToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId appId:(NSString *)appId location:(os_last_location *)coordinate networkType:(NSNumber *)netType backgroundState:(BOOL)backgroundState authHashToken:(NSString *)authHashToken authHashTokenKey:(NSString *)authHashKey externalIdAuthToken:(NSString *)externalIdAuthToken {
     let request = [OSRequestSendLocation new];
     
     let params = [NSMutableDictionary new];
@@ -284,8 +361,8 @@
     params[@"net_type"] = netType;
     params[@"loc_bg"] = @(backgroundState);
 
-    if (emailAuthHash && emailAuthHash.length > 0)
-        params[@"email_auth_hash"] = emailAuthHash;
+    if (authHashToken && authHashToken.length > 0 && authHashKey)
+        params[authHashKey] = authHashToken;
     
     if (externalIdAuthToken && externalIdAuthToken.length > 0)
         params[@"external_user_id_auth_hash"] = externalIdAuthToken;
@@ -305,14 +382,31 @@
                          badgeCount:(NSNumber * _Nonnull)badgeCount
                      emailAuthToken:(NSString * _Nullable)emailAuthHash
                 externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken {
+    return [self withUserId:userId appId:appId badgeCount:badgeCount authToken:emailAuthHash authTokenKey:@"email_auth_hash" externalIdAuthToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId
+                     appId:(NSString *)appId
+                badgeCount:(NSNumber *)badgeCount
+              smsAuthToken:(NSString *)smsAuthToken
+       externalIdAuthToken:(NSString *)externalIdAuthToken {
+    return [self withUserId:userId appId:appId badgeCount:badgeCount authToken:smsAuthToken authTokenKey:@"sms_auth_hash" externalIdAuthToken:externalIdAuthToken];
+}
+
++ (instancetype)withUserId:(NSString *)userId
+                     appId:(NSString *)appId
+                badgeCount:(NSNumber *)badgeCount
+                 authToken:(NSString *)authToken
+              authTokenKey:(NSString *)authTokenKey
+       externalIdAuthToken:(NSString *)externalIdAuthToken {
     let request = [OSRequestBadgeCount new];
     
     let params = [NSMutableDictionary new];
     params[@"app_id"] = appId;
     params[@"badgeCount"] = badgeCount;
     
-    if (emailAuthHash && emailAuthHash.length > 0)
-        params[@"email_auth_hash"] = emailAuthHash;
+    if (authToken && authToken.length > 0 && authTokenKey)
+        params[authTokenKey] = authToken;
     
     if (externalIdAuthToken && externalIdAuthToken.length > 0)
         params[@"external_user_id_auth_hash"] = externalIdAuthToken;
@@ -335,38 +429,6 @@ NSString * const NOTIFICATION_IDS = @"notification_ids";
                      appId:(NSString *)appId
                 activeTime:(NSNumber *)activeTime
                    netType:(NSNumber *)netType
-            emailAuthToken:(NSString *)emailAuthHash
-       externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken
-                deviceType:(NSNumber * _Nonnull)deviceType {
-    let request = [OSRequestOnFocus new];
-
-    let params = [NSMutableDictionary new];
-    params[@"app_id"] = appId;
-    params[@"state"] = @"ping";
-    params[@"type"] = @1;
-    params[@"active_time"] = activeTime;
-    params[@"net_type"] = netType;
-    params[@"device_type"] = deviceType;
-
-    if (emailAuthHash && emailAuthHash.length > 0)
-        params[@"email_auth_hash"] = emailAuthHash;
-    
-    if (externalIdAuthToken && externalIdAuthToken.length > 0)
-        params[@"external_user_id_auth_hash"] = externalIdAuthToken;
-
-    request.parameters = params;
-    request.method = POST;
-    request.path = [NSString stringWithFormat:@"players/%@/on_focus", userId];
-
-    return request;
-}
-
-+ (instancetype)withUserId:(NSString *)userId
-                     appId:(NSString *)appId
-                activeTime:(NSNumber *)activeTime
-                   netType:(NSNumber *)netType
-            emailAuthToken:(NSString *)emailAuthHash
-       externalIdAuthToken:(NSString * _Nullable)externalIdAuthToken
                 deviceType:(NSNumber *)deviceType
            influenceParams:(NSArray <OSFocusInfluenceParam *> *)influenceParams {
     let request = [OSRequestOnFocus new];
@@ -379,16 +441,12 @@ NSString * const NOTIFICATION_IDS = @"notification_ids";
     params[@"net_type"] = netType;
     params[@"device_type"] = deviceType;
     
-    for (OSFocusInfluenceParam *influenceParam in influenceParams) {
-        params[influenceParam.influenceKey] = influenceParam.influenceIds;
-        params[influenceParam.influenceDirectKey] = @(influenceParam.directInfluence);
+    if (influenceParams) {
+        for (OSFocusInfluenceParam *influenceParam in influenceParams) {
+            params[influenceParam.influenceKey] = influenceParam.influenceIds;
+            params[influenceParam.influenceDirectKey] = @(influenceParam.directInfluence);
+        }
     }
-
-    if (emailAuthHash && emailAuthHash.length > 0)
-        params[@"email_auth_hash"] = emailAuthHash;
-    
-    if (externalIdAuthToken && externalIdAuthToken.length > 0)
-        params[@"external_user_id_auth_hash"] = externalIdAuthToken;
     
     request.parameters = params;
     request.method = POST;
@@ -396,7 +454,6 @@ NSString * const NOTIFICATION_IDS = @"notification_ids";
     
     return request;
 }
-
 @end
 
 @implementation OSRequestInAppMessageViewed
@@ -500,6 +557,18 @@ NSString * const NOTIFICATION_IDS = @"notification_ids";
 
 @implementation OSRequestUpdateExternalUserId
 + (instancetype _Nonnull)withUserId:(NSString * _Nullable)externalId withUserIdHashToken:(NSString * _Nullable)hashToken withOneSignalUserId:(NSString *)userId appId:(NSString *)appId {
+    return [self withUserId:externalId withUserIdHashToken:hashToken withOneSignalUserId:userId withChannelHashToken:nil withHashTokenKey:nil appId:appId];
+}
+
++ (instancetype)withUserId:(NSString *)externalId withUserIdHashToken:(NSString *)hashToken withOneSignalUserId:(NSString *)userId withEmailHashToken:(NSString *)emailHashToken appId:(NSString *)appId {
+    return [self withUserId:externalId withUserIdHashToken:hashToken withOneSignalUserId:userId withChannelHashToken:emailHashToken withHashTokenKey:@"email_auth_hash" appId:appId];
+}
+
++ (instancetype)withUserId:(NSString *)externalId withUserIdHashToken:(NSString *)hashToken withOneSignalUserId:(NSString *)userId withSMSHashToken:(NSString *)smsHashToken appId:(NSString *)appId {
+    return [self withUserId:externalId withUserIdHashToken:hashToken withOneSignalUserId:userId withChannelHashToken:smsHashToken withHashTokenKey:@"sms_auth_hash" appId:appId];
+}
+
++ (instancetype)withUserId:(NSString *)externalId withUserIdHashToken:(NSString *)hashToken withOneSignalUserId:(NSString *)userId  withChannelHashToken:(NSString *)channelHashToken withHashTokenKey:(NSString *)hashTokenKey appId:(NSString *)appId {
     NSString *msg = [NSString stringWithFormat:@"App ID: %@, external ID: %@", appId, externalId];
     [OneSignal onesignal_Log:ONE_S_LL_DEBUG message:msg];
 
@@ -509,6 +578,8 @@ NSString * const NOTIFICATION_IDS = @"notification_ids";
     [parametres setObject:externalId ?: @"" forKey:@"external_user_id"];
     if (hashToken && [hashToken length] > 0)
         [parametres setObject:hashToken forKey:@"external_user_id_auth_hash"];
+    if (channelHashToken && hashTokenKey)
+        [parametres setObject:channelHashToken forKey:hashTokenKey];
     request.parameters = parametres;
     request.method = PUT;
     request.path = [NSString stringWithFormat:@"players/%@", userId];
