@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = "Gandom-OneSignal"
-  s.version          = "3.1.1.1"
+  s.version          = "3.4.0.0"
   s.summary          = "OneSignal push notification library for mobile apps. Powered by Gandom proxy servers!"
   s.homepage         = "http://gandom.co"
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
