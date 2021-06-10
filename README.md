@@ -24,14 +24,14 @@ use_frameworks!
 
 target 'YourAwesomeProject' do
 
-    pod 'Gandom-OneSignal', '~> 3.4.0.0'
+    pod 'Gandom-OneSignal', '~> 3.5.1.0'
 
     inhibit_all_warnings!
 end
 
 target 'OneSignalNotificationServiceExtension' do
   
-    pod 'Gandom-OneSignal', '3.4.0.0'
+    pod 'Gandom-OneSignal', '3.5.1.0'
     
     inhibit_all_warnings!
   
