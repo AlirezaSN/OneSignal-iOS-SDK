@@ -126,7 +126,7 @@ NSString* const kOSSettingsKeyProvidesAppNotificationSettings = @"kOSSettingsKey
 
 @implementation OneSignal
 
-NSString* const ONESIGNAL_VERSION = @"030400";
+NSString* const ONESIGNAL_VERSION = @"030501";
 static NSString* mSDKType = @"native";
 static BOOL coldStartFromTapOnNotification = NO;
 static BOOL shouldDelaySubscriptionUpdate = false;
@@ -1264,9 +1264,9 @@ void onesignal_Log(ONE_S_LOG_LEVEL logLevel, NSString* message) {
     }
     
     if (!self.playerTags.tagsToSend) {
-        self.playerTags.tagsToSend = [keyValuePair mutableCopy];
+        [self.playerTags setTagsToSend: [keyValuePair mutableCopy]];
     } else {
-        [self.playerTags.tagsToSend addEntriesFromDictionary:keyValuePair];
+        [self.playerTags addTagsToSend:keyValuePair];
     }
     
     if (successBlock || failureBlock) {
@@ -1286,6 +1286,16 @@ void onesignal_Log(ONE_S_LOG_LEVEL logLevel, NSString* message) {
        [OneSignalHelper performSelector:@selector(sendTagsToServer) onMainThreadOnObject:self withObject:nil afterDelay:5];
 }
 
++ (void)sendTagsOnBackground {
+    if (!self.playerTags.tagsToSend || self.playerTags.tagsToSend.count <= 0)
+        return;
+    
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendTagsToServer) object:nil];
+    [OneSignalHelper dispatch_async_on_main_queue:^{
+        [self sendTagsToServer];
+    }];
+}
+
 // Called only with a delay to batch network calls.
 + (void)sendTagsToServer {
     
@@ -1298,7 +1308,7 @@ void onesignal_Log(ONE_S_LOG_LEVEL logLevel, NSString* message) {
 
     [self.playerTags saveTagsToUserDefaults];
     NSDictionary* nowSendingTags = self.playerTags.tagsToSend;
-    self.playerTags.tagsToSend = nil;
+    [self.playerTags setTagsToSend: nil];
     
     NSArray* nowProcessingCallbacks = pendingSendTagCallbacks;
     pendingSendTagCallbacks = nil;
@@ -1336,6 +1346,7 @@ void onesignal_Log(ONE_S_LOG_LEVEL logLevel, NSString* message) {
     }
     
     [OneSignalClient.sharedClient executeRequest:[OSRequestGetTags withUserId:self.currentSubscriptionState.userId appId:self.appId] onSuccess:^(NSDictionary *result) {
+        [self.playerTags addTags:[result objectForKey:@"tags"]];
         successBlock([result objectForKey:@"tags"]);
     } onFailure:failureBlock];
     
@@ -1398,17 +1409,12 @@ void onesignal_Log(ONE_S_LOG_LEVEL logLevel, NSString* message) {
 
 + (void)deleteTags:(NSArray*)keys onSuccess:(OSResultSuccessBlock)successBlock onFailure:(OSFailureBlock)failureBlock {
     NSMutableDictionary* tags = [[NSMutableDictionary alloc] init];
-    [self.playerTags deleteTags:keys];
     for (NSString* key in keys) {
-        if (self.playerTags.tagsToSend && self.playerTags.tagsToSend[key]) {
-            if (![self.playerTags.tagsToSend[key] isEqual:@""]) {
-                [self.playerTags.tagsToSend removeObjectForKey:key];
-            }
-        }
-        else
+        if (!self.playerTags.tagsToSend || !self.playerTags.tagsToSend[key]) {
             tags[key] = @"";
+        }
     }
-    
+    [self.playerTags deleteTags:keys];
     [self sendTags:tags onSuccess:successBlock onFailure:failureBlock];
 }
 
@@ -1743,7 +1749,6 @@ static dispatch_queue_t serialQueue;
     userState.deviceOs = [[UIDevice currentDevice] systemVersion];
     userState.timezone = [NSNumber numberWithInt:(int)[[NSTimeZone localTimeZone] secondsFromGMT]];
     userState.timezoneId = [[NSTimeZone localTimeZone] name];
-    userState.adId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
     userState.sdk = ONESIGNAL_VERSION;
 
     // should be set to true even before the API request is finished
@@ -1839,7 +1844,7 @@ static dispatch_queue_t serialQueue;
     if (userState.tags) {
         [self.playerTags addTags:userState.tags];
         [self.playerTags saveTagsToUserDefaults];
-        self.playerTags.tagsToSend = nil;
+        [self.playerTags setTagsToSend: nil];
         
         nowProcessingCallbacks = pendingSendTagCallbacks;
         pendingSendTagCallbacks = nil;
@@ -2176,8 +2181,7 @@ static NSString *_lastnonActiveMessageId;
     else
         disableBadgeClearing = NO;
     
-    if (disableBadgeClearing ||
-        ([self.osNotificationSettings getNotificationPermissionState].notificationTypes & NOTIFICATION_TYPE_BADGE) == 0)
+    if (disableBadgeClearing)
         return false;
     
     bool wasBadgeSet = [UIApplication sharedApplication].applicationIconBadgeNumber > 0;
@@ -2335,6 +2339,15 @@ static NSString *_lastnonActiveMessageId;
     return [OneSignalNotificationServiceExtensionHandler
             didReceiveNotificationExtensionRequest:request
             withMutableNotificationContent:replacementContent];
+}
+
+// Called from the app's Notification Service Extension. Calls contentHandler() to display the notification
++ (UNMutableNotificationContent*)didReceiveNotificationExtensionRequest:(UNNotificationRequest*)request                              withMutableNotificationContent:(UNMutableNotificationContent*)replacementContent
+                withContentHandler:(void (^)(UNNotificationContent * _Nonnull))contentHandler {
+    return [OneSignalNotificationServiceExtensionHandler
+            didReceiveNotificationExtensionRequest:request
+            withMutableNotificationContent:replacementContent
+            withContentHandler:contentHandler];
 }
 
 
@@ -2764,24 +2777,6 @@ static NSString *_lastnonActiveMessageId;
     return updateExternalUserId || updateEmailExternalUserId;
 }
 
-+ (NSMutableDictionary*)getDuplicateExternalUserIdResponse:(NSString*)externalId withRequests:(NSDictionary*)requests {
-    NSMutableDictionary *results = [NSMutableDictionary new];
-    [OneSignal onesignal_Log:ONE_S_LL_WARN message:[NSString stringWithFormat:@"Attempted to set external user id, but %@ is already set", externalId]];
-
-    results[@"push"] = @{
-        @"success" : @(true)
-    };
-
-    // Make sure to only add email if email was attempted
-    if (requests[@"email"]) {
-        results[@"email"] = @{
-            @"success" : @(true)
-        };
-    }
-
-    return results;
-}
-
 /*
  Start of outcome module
  */
@@ -2917,10 +2912,11 @@ static NSString *_lastnonActiveMessageId;
     }
     [OneSignal onesignal_Log:ONE_S_LL_VERBOSE message:@"UIApplication(OneSignal) LOADED!"];
     
-    // Prevent Xcode storyboard rendering process from crashing with custom IBDesignable Views
+    // Prevent Xcode storyboard rendering process from crashing with custom IBDesignable Views or from hostless unit tests.
     // https://github.com/OneSignal/OneSignal-iOS-SDK/issues/160
-    NSProcessInfo *processInfo = [NSProcessInfo processInfo];
-    if ([[processInfo processName] isEqualToString:@"IBDesignablesAgentCocoaTouch"] || [[processInfo processName] isEqualToString:@"IBDesignablesAgent-iOS"])
+    // https://github.com/OneSignal/OneSignal-iOS-SDK/issues/935
+    NSString *processName = [[NSProcessInfo processInfo] processName];
+    if ([processName isEqualToString:@"IBDesignablesAgentCocoaTouch"] || [processName isEqualToString:@"IBDesignablesAgent-iOS"] || [processName isEqualToString:@"xctest"])
         return;
 
     // Double loading of class detection.
@@ -2954,10 +2950,7 @@ static NSString *_lastnonActiveMessageId;
     if (!NSClassFromString(@"UNUserNotificationCenter"))
         return;
 
-    [OneSignalUNUserNotificationCenter swizzleSelectors];
-
-    // Set our own delegate if one hasn't been set already from something else.
-    [OneSignalHelper registerAsUNNotificationCenterDelegate];
+    [OneSignalUNUserNotificationCenter setup];
 }
 
 +(BOOL) shouldDisableBasedOnProcessArguments {

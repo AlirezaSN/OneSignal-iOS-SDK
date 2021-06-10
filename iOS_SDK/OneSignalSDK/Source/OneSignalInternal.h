@@ -67,6 +67,7 @@
 + (void)setIsOnSessionSuccessfulForCurrentState:(BOOL)value;
 + (BOOL)shouldRegisterNow;
 + (void)receivedInAppMessageJson:(NSArray<NSDictionary *> *_Nullable)messagesJson;
++ (void)sendTagsOnBackground;
 
 + (NSDate *_Nonnull)sessionLaunchTime;
 
@@ -93,7 +94,7 @@
 
 + (void)onesignal_Log:(ONE_S_LOG_LEVEL)logLevel message:(NSString* _Nonnull)message;
 
-+ (OSPlayerTags *)getPlayerTags;
++ (OSPlayerTags *_Nonnull)getPlayerTags;
 
 @end
 

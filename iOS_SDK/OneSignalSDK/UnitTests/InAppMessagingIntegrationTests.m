@@ -270,8 +270,8 @@
     [OneSignal pauseInAppMessages:false];
     
     let trigger = [OSTrigger dynamicTriggerWithKind:OS_DYNAMIC_TRIGGER_KIND_SESSION_TIME withOperator:OSTriggerOperatorTypeLessThan withValue:@10.0];
-
-    let message = [OSInAppMessageTestHelper testMessageWithTriggers:@[@[trigger]] withRedisplayLimit:@10 delay:@0];
+    
+    let message = [OSInAppMessageTestHelper testMessageWithTriggers:@[@[trigger]] withRedisplayLimit:10 delay:@0];
 
     [self initOneSignalWithInAppMessage:message];
     
@@ -388,6 +388,8 @@
     }];
 
     [OneSignal addTrigger:@"prop1" withValue:@2];
+    
+    [UnitTestCommonMethods runLongBackgroundThreads];
 
     // IAM should be shown instantly and be within the messageDisplayQueue
     XCTAssertEqual(1, OSMessagingControllerOverrider.messageDisplayQueue.count);
@@ -420,7 +422,10 @@
 
     [OneSignal addTrigger:@"prop1" withValue:@2];
 
+    [UnitTestCommonMethods runLongBackgroundThreads];
+    
     XCTAssertEqual(1, OSMessagingControllerOverrider.messageDisplayQueue.count);
+   
     // The display should cause an new "viewed" API request
     XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequestType, NSStringFromClass([OSRequestInAppMessageViewed class]));
 
@@ -747,9 +752,11 @@
     // the trigger should immediately evaluate to true and should
     // be shown once the SDK is fully initialized.
     [OneSignalClientOverrider setMockResponseForRequest:NSStringFromClass([OSRequestRegisterUser class]) withResponse:registrationResponse];
-    
+
     [UnitTestCommonMethods initOneSignal_andThreadWait];
     
+    [UnitTestCommonMethods runLongBackgroundThreads];
+
     // the message should now be displayed
     XCTAssertEqualObjects(OneSignalClientOverrider.lastHTTPRequestType, NSStringFromClass([OSRequestInAppMessageViewed class]));
 }
@@ -1055,8 +1062,8 @@
     XCTAssertEqual(outcomeWeight, [[OneSignalClientOverrider.lastHTTPRequest objectForKey:@"weight"] intValue]);
 
     let lenght = OneSignalClientOverrider.executedRequests.count;
-    XCTAssertEqual(@"outcomes/measure", [OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 1].path);
-    XCTAssertEqual(@"outcomes/measure", [OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 2].path);
+    XCTAssertEqualObjects(@"outcomes/measure", [OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 1].path);
+    XCTAssertEqualObjects(@"outcomes/measure", [OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 2].path);
     XCTAssertNotEqual(@"outcomes/measure", [OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 3].path);
 
     XCTAssertEqual(outcomeName, [[OneSignalClientOverrider.executedRequests objectAtIndex:lenght - 2].parameters objectForKey:@"id"]);
